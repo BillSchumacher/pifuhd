@@ -26,9 +26,7 @@ def euler_to_rot_mat(r_x, r_y, r_z):
                     [0, 0, 1]
                     ])
 
-    R = np.dot(R_z, np.dot(R_y, R_x))
-
-    return R
+    return np.dot(R_z, np.dot(R_y, R_x))
 
 
 class MeshEvaluator:
@@ -64,9 +62,7 @@ class MeshEvaluator:
         src_tgt_dist = src_tgt_dist.mean()
         tgt_src_dist = tgt_src_dist.mean()
 
-        chamfer_dist = (src_tgt_dist + tgt_src_dist) / 2
-
-        return chamfer_dist
+        return (src_tgt_dist + tgt_src_dist) / 2
 
     def get_surface_dist(self, num_samples=10000):
         # P2S
@@ -92,8 +88,7 @@ class MeshEvaluator:
         self._normal_render.set_matrices(view_mat, model_mat)
         self._normal_render.set_normal_mesh(self.scale_factor*mesh.vertices, mesh.faces, mesh.vertex_normals, mesh.faces)
         self._normal_render.draw()
-        normal_img = self._normal_render.get_color()
-        return normal_img
+        return self._normal_render.get_color()
 
     def _get_reproj_normal_error(self, deg):
         tgt_normal = self._render_normal(self.tgt_mesh, deg)
@@ -165,20 +160,23 @@ if __name__ == '__main__':
             name = tar_name.split('/')[-1][:-4]
 
             for src in src_names:
-                src_name = os.path.join(src_path, 'result_%s_%s' % (name, src))
+                src_name = os.path.join(src_path, f'result_{name}_{src}')
                 if not os.path.exists(src_name):
                     continue
                 evaluator.set_mesh(src_name, tar_name, 0.13, -40)
 
-                vals = []
-                vals.append(0.1 * evaluator.get_chamfer_dist())
+                vals = [0.1 * evaluator.get_chamfer_dist()]
                 vals.append(0.1 * evaluator.get_surface_dist())
-                vals.append(4.0 * evaluator.get_reproj_normal_error(save_demo_img=os.path.join(src_path, '%s_%s.png' % (name, src[:-4]))))
+                vals.append(
+                    4.0
+                    * evaluator.get_reproj_normal_error(
+                        save_demo_img=os.path.join(
+                            src_path, f'{name}_{src[:-4]}.png'
+                        )
+                    )
+                )
 
-                item = {
-                    'name': '%s_%s' % (name, src),
-                    'vals': vals
-                }
+                item = {'name': f'{name}_{src}', 'vals': vals}
 
                 total_vals.append(vals)
                 items.append(item)
@@ -198,21 +196,26 @@ if __name__ == '__main__':
             name = tar_name.split('/')[-1][:-9]
 
             for src in src_names:
-                src_name = os.path.join(src_path, 'result_%s_%s' % (name, src))
+                src_name = os.path.join(src_path, f'result_{name}_{src}')
                 if not os.path.exists(src_name):
                     continue
 
                 evaluator.set_mesh(src_name, tar_name, 1.3, -120)
 
                 vals = []
-                vals.append(evaluator.get_chamfer_dist())
-                vals.append(evaluator.get_surface_dist())
-                vals.append(4.0 * evaluator.get_reproj_normal_error(save_demo_img=os.path.join(src_path, '%s_%s.png' % (name, src[:-4]))))
-
-                item = {
-                    'name': '%s_%s' % (name, src),
-                    'vals': vals
-                }
+                vals.extend(
+                    (
+                        evaluator.get_chamfer_dist(),
+                        evaluator.get_surface_dist(),
+                        4.0
+                        * evaluator.get_reproj_normal_error(
+                            save_demo_img=os.path.join(
+                                src_path, f'{name}_{src[:-4]}.png'
+                            )
+                        ),
+                    )
+                )
+                item = {'name': f'{name}_{src}', 'vals': vals}
 
                 total_vals.append(vals)
                 items.append(item)

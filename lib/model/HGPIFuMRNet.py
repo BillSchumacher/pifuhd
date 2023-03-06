@@ -148,7 +148,7 @@ class HGPIFuMRNet(BasePIFuNet):
         newlabels = []
         for i in range(B):
             xyz = self.projection(points[:,i], calib_local[:,i], transforms)
-            
+
             xy = xyz[:, :2, :]
 
             # if the point is outside bounding box, return outside.
@@ -168,9 +168,9 @@ class HGPIFuMRNet(BasePIFuNet):
             z_feat = self.netG.phi
             if not self.opt.train_full_pifu:
                 z_feat = z_feat.detach()
-                        
+
             intermediate_preds_list = []
-            for j, im_feat in enumerate(self.im_feat_list):
+            for im_feat in self.im_feat_list:
                 point_local_feat_list = [self.index(im_feat.view(-1,B,*im_feat.size()[1:])[:,i], xy), z_feat]
                 point_local_feat = torch.cat(point_local_feat_list, 1)
                 pred = self.mlp(point_local_feat)[0]
@@ -183,7 +183,7 @@ class HGPIFuMRNet(BasePIFuNet):
         self.preds = torch.cat(preds,0)
         self.preds_interm = torch.cat(preds_interm, 1) # first dim is for intermediate predictions
         self.preds_low = torch.cat(preds_low, 1) # first dim is for intermediate predictions
-        
+
         if labels is not None:
             self.w = torch.cat(ws,0)
             self.gamma = torch.cat(gammas,0)
@@ -263,29 +263,19 @@ class HGPIFuMRNet(BasePIFuNet):
         '''
 
         error = {}
-        if self.opt.train_full_pifu:
-            if not self.opt.no_intermediate_loss:
-                error['Err(occ)'] = 0.0
-                for i in range(self.preds_low.size(0)):
-                    error['Err(occ)'] += self.criteria['occ'](self.preds_low[i], self.labels, self.gamma, self.w)
-                error['Err(occ)'] /= self.preds_low.size(0)
+        if self.opt.train_full_pifu and not self.opt.no_intermediate_loss:
+            error['Err(occ)'] = 0.0
+            for i in range(self.preds_low.size(0)):
+                error['Err(occ)'] += self.criteria['occ'](self.preds_low[i], self.labels, self.gamma, self.w)
+            error['Err(occ)'] /= self.preds_low.size(0)
 
-            error['Err(occ:fine)'] = 0.0
-            for i in range(self.preds_interm.size(0)):
-                error['Err(occ:fine)'] += self.criteria['occ'](self.preds_interm[i], self.labels, self.gamma, self.w)
-            error['Err(occ:fine)'] /= self.preds_interm.size(0)
+        error['Err(occ:fine)'] = 0.0
+        for i in range(self.preds_interm.size(0)):
+            error['Err(occ:fine)'] += self.criteria['occ'](self.preds_interm[i], self.labels, self.gamma, self.w)
+        error['Err(occ:fine)'] /= self.preds_interm.size(0)
 
-            if self.nmls is not None and self.labels_nml is not None:
-                error['Err(nml:fine)'] = self.criteria['nml'](self.nmls, self.labels_nml)
-        else:
-            error['Err(occ:fine)'] = 0.0
-            for i in range(self.preds_interm.size(0)):
-                error['Err(occ:fine)'] += self.criteria['occ'](self.preds_interm[i], self.labels, self.gamma, self.w)
-            error['Err(occ:fine)'] /= self.preds_interm.size(0)
-
-            if self.nmls is not None and self.labels_nml is not None:
-                error['Err(nml:fine)'] = self.criteria['nml'](self.nmls, self.labels_nml)
-        
+        if self.nmls is not None and self.labels_nml is not None:
+            error['Err(nml:fine)'] = self.criteria['nml'](self.nmls, self.labels_nml)
         return error
 
 

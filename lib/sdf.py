@@ -67,9 +67,10 @@ def batch_eval_tensor(points, eval_func, num_samples=512 * 512 * 512):
     num_pts = points.size(1)
 
     num_batches = num_pts // num_samples
-    vals = []
-    for i in range(num_batches):
-        vals.append(eval_func(points[:, i * num_samples:i * num_samples + num_samples]))
+    vals = [
+        eval_func(points[:, i * num_samples : i * num_samples + num_samples])
+        for i in range(num_batches)
+    ]
     if num_pts % num_samples:
         vals.append(eval_func(points[:, num_batches * num_samples:]))
 

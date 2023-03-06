@@ -20,7 +20,7 @@ class MLP(nn.Module):
         self.norm = norm
         self.last_op = last_op
 
-        for l in range(0, len(filter_channels)-1):
+        for l in range(len(filter_channels)-1):
             if l in self.res_layers:
                 self.filters.append(nn.Conv1d(
                     filter_channels[l] + filter_channels[0],

@@ -45,11 +45,11 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
             image_tensor_global = torch.cat([image_tensor_global, net.netG.nmlB], 0)
     except:
         pass
-    
+
     b_min = data['b_min']
     b_max = data['b_max']
     try:
-        save_img_path = save_path[:-4] + '.png'
+        save_img_path = f'{save_path[:-4]}.png'
         save_img_list = []
         for v in range(image_tensor_global.shape[0]):
             save_img = (np.transpose(image_tensor_global[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
@@ -68,10 +68,7 @@ def gen_mesh(res, net, cuda, data, save_path, thresh=0.5, use_octree=True, compo
         interval = 50000
         for i in range(len(color) // interval + 1):
             left = i * interval
-            if i == len(color) // interval:
-                right = -1
-            else:
-                right = (i + 1) * interval
+            right = -1 if i == len(color) // interval else (i + 1) * interval
             net.calc_normal(verts_tensor[:, None, :, left:right], calib_tensor[:,None], calib_tensor)
             nml = net.nmls.detach().cpu().numpy()[0] * 0.5 + 0.5
             color[left:right] = nml.T
@@ -100,7 +97,7 @@ def gen_mesh_imgColor(res, net, cuda, data, save_path, thresh=0.5, use_octree=Tr
     b_min = data['b_min']
     b_max = data['b_max']
     try:
-        save_img_path = save_path[:-4] + '.png'
+        save_img_path = f'{save_path[:-4]}.png'
         save_img_list = []
         for v in range(image_tensor_global.shape[0]):
             save_img = (np.transpose(image_tensor_global[v].detach().cpu().numpy(), (1, 2, 0)) * 0.5 + 0.5)[:, :, ::-1] * 255.0
@@ -134,11 +131,11 @@ def recon(opt, use_rect=False):
     if opt.load_netMR_checkpoint_path is not None:
         state_dict_path = opt.load_netMR_checkpoint_path
     elif opt.resume_epoch < 0:
-        state_dict_path = '%s/%s_train_latest' % (opt.checkpoints_path, opt.name)
+        state_dict_path = f'{opt.checkpoints_path}/{opt.name}_train_latest'
         opt.resume_epoch = 0
     else:
         state_dict_path = '%s/%s_train_epoch_%d' % (opt.checkpoints_path, opt.name, opt.resume_epoch)
-    
+
     start_id = opt.start_id
     end_id = opt.end_id
 
@@ -153,7 +150,7 @@ def recon(opt, use_rect=False):
         resolution = opt.resolution
         results_path = opt.results_path
         loadSize = opt.loadSize
-        
+
         opt = state_dict['opt']
         opt.dataroot = dataroot
         opt.resolution = resolution
@@ -161,14 +158,10 @@ def recon(opt, use_rect=False):
         opt.loadSize = loadSize
     else:
         raise Exception('failed loading state dict!', state_dict_path)
-    
+
     # parser.print_options(opt)
 
-    if use_rect:
-        test_dataset = EvalDataset(opt)
-    else:
-        test_dataset = EvalWPoseDataset(opt)
-
+    test_dataset = EvalDataset(opt) if use_rect else EvalWPoseDataset(opt)
     print('test data size: ', len(test_dataset))
     projection_mode = test_dataset.projection_mode
 
@@ -184,7 +177,7 @@ def recon(opt, use_rect=False):
 
     os.makedirs(opt.checkpoints_path, exist_ok=True)
     os.makedirs(opt.results_path, exist_ok=True)
-    os.makedirs('%s/%s/recon' % (opt.results_path, opt.name), exist_ok=True)
+    os.makedirs(f'{opt.results_path}/{opt.name}/recon', exist_ok=True)
 
     if start_id < 0:
         start_id = 0
@@ -199,7 +192,7 @@ def recon(opt, use_rect=False):
         for i in tqdm(range(start_id, end_id)):
             if i >= len(test_dataset):
                 break
-            
+
             # for multi-person processing, set it to False
             if True:
                 test_data = test_dataset[i]
