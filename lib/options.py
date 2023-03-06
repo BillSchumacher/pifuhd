@@ -186,8 +186,7 @@ class BaseOptions():
             return self.parser.parse_args(args)
 
     def print_options(self, opt):
-        message = ''
-        message += '----------------- Options ---------------\n'
+        message = '' + '----------------- Options ---------------\n'
         for k, v in sorted(vars(opt).items()):
             comment = ''
             default = self.parser.get_default(k)

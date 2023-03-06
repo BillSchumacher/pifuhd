@@ -58,7 +58,7 @@ def set_renderer():
     torch.cuda.set_device(device)
 
     # Initialize an OpenGL perspective camera.
-    R, T = look_at_view_transform(2.0, 0, 180) 
+    R, T = look_at_view_transform(2.0, 0, 180)
     cameras = OpenGLOrthographicCameras(device=device, R=R, T=T)
 
     raster_settings = RasterizationSettings(
@@ -71,18 +71,12 @@ def set_renderer():
 
     lights = PointLights(device=device, location=((2.0, 2.0, 2.0),))
 
-    renderer = MeshRenderer(
+    return MeshRenderer(
         rasterizer=MeshRasterizer(
-            cameras=cameras, 
-            raster_settings=raster_settings
+            cameras=cameras, raster_settings=raster_settings
         ),
-        shader=HardPhongShader(
-            device=device, 
-            cameras=cameras,
-            lights=lights
-        )
+        shader=HardPhongShader(device=device, cameras=cameras, lights=lights),
     )
-    return renderer
 
 def get_verts_rgb_colors(obj_path):
   rgb_colors = []
@@ -136,5 +130,7 @@ def generate_video_from_obj(obj_path, image_path, video_path, renderer):
 
 def video(path):
     mp4 = open(path,'rb').read()
-    data_url = "data:video/mp4;base64," + b64encode(mp4).decode()
-    return HTML('<video width=500 controls loop> <source src="%s" type="video/mp4"></video>' % data_url)
+    data_url = f"data:video/mp4;base64,{b64encode(mp4).decode()}"
+    return HTML(
+        f'<video width=500 controls loop> <source src="{data_url}" type="video/mp4"></video>'
+    )

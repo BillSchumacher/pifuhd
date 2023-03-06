@@ -20,11 +20,8 @@ def crop_image(img, rect):
     top = abs(y) if y < 0 else 0
     right = abs(img.shape[1]-(x+w)) if x + w >= img.shape[1] else 0
     bottom = abs(img.shape[0]-(y+h)) if y + h >= img.shape[0] else 0
-    
-    if img.shape[2] == 4:
-        color = [0, 0, 0, 0]
-    else:
-        color = [0, 0, 0]
+
+    color = [0, 0, 0, 0] if img.shape[2] == 4 else [0, 0, 0]
     new_img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
 
     x = x + left
@@ -55,10 +52,7 @@ def face_crop(pts):
     ps = np.stack(ps, 0)
     if ps.shape[0] <= 1:
         raise IOError('key points are not properly set')
-    if ps.shape[0] <= 3 and cnt != 2:
-        center = ps[-1]
-    else:
-        center = ps.mean(0)
+    center = ps[-1] if ps.shape[0] <= 3 and cnt != 2 else ps.mean(0)
     radius = int(1.4*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(0))))
 
 
@@ -77,23 +71,16 @@ def upperbody_crop(pts):
     flag = pts[:,2] > 0.2
 
     mshoulder = pts[1,:2]
-    ps = []
     pts_id = [8]
-    for i in pts_id:
-        if flag[i]:
-            ps.append(pts[i,:2])
-
+    ps = [pts[i,:2] for i in pts_id if flag[i]]
     center = mshoulder
     if len(ps) == 1:
         ps = np.stack(ps, 0)
         radius = int(0.8*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1))))
     else:
-        ps = []
         pts_id = [0, 2, 5]
         ratio = [0.4, 0.3, 0.3]
-        for i in pts_id:
-            if flag[i]:
-                ps.append(pts[i,:2])
+        ps = [pts[i,:2] for i in pts_id if flag[i]]
         ps = np.stack(ps, 0)
         radius = int(0.8*np.max(np.sqrt(((ps - center[None,:])**2).reshape(-1,2).sum(1)) / np.array(ratio)))
 
@@ -143,7 +130,19 @@ class EvalWPoseDataset(Dataset):
         self.projection_mode = projection
 
         self.root = self.opt.dataroot
-        self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if f.split('.')[-1] in ['png', 'jpeg', 'jpg', 'PNG', 'JPG', 'JPEG'] and os.path.exists(os.path.join(self.root,f.replace('.%s' % (f.split('.')[-1]), '_keypoints.json')))])
+        self.img_files = sorted(
+            [
+                os.path.join(self.root, f)
+                for f in os.listdir(self.root)
+                if f.split('.')[-1] in ['png', 'jpeg', 'jpg', 'PNG', 'JPG', 'JPEG']
+                and os.path.exists(
+                    os.path.join(
+                        self.root,
+                        f.replace(f".{f.split('.')[-1]}", '_keypoints.json'),
+                    )
+                )
+            ]
+        )
         self.IMG = os.path.join(self.root)
 
         self.phase = 'val'
@@ -169,7 +168,9 @@ class EvalWPoseDataset(Dataset):
         return len(self.img_files)
 
     def get_n_person(self, index):
-        joint_path = self.img_files[index].replace('.%s' % (self.img_files[index].split('.')[-1]), '_keypoints.json')
+        joint_path = self.img_files[index].replace(
+            f".{self.img_files[index].split('.')[-1]}", '_keypoints.json'
+        )
         # Calib
         with open(joint_path) as json_file:
             data = json.load(json_file)
@@ -177,7 +178,9 @@ class EvalWPoseDataset(Dataset):
 
     def get_item(self, index):
         img_path = self.img_files[index]
-        joint_path = self.img_files[index].replace('.%s' % (self.img_files[index].split('.')[-1]), '_keypoints.json')
+        joint_path = self.img_files[index].replace(
+            f".{self.img_files[index].split('.')[-1]}", '_keypoints.json'
+        )
         # Name
         img_name = os.path.splitext(os.path.basename(img_path))[0]
         # Calib
@@ -185,32 +188,25 @@ class EvalWPoseDataset(Dataset):
             data = json.load(json_file)
             if len(data['people']) == 0:
                 raise IOError('non human found!!')
-            
-            # if True, the person with the largest height will be chosen. 
-            # set to False for multi-person processing
-            if True:
-                selected_data = data['people'][0]
-                height = 0
-                if len(data['people']) != 1:
-                    for i in range(len(data['people'])):
-                        tmp = data['people'][i]
-                        keypoints = np.array(tmp['pose_keypoints_2d']).reshape(-1,3)
 
-                        flags = keypoints[:,2] > 0.5 #openpose
-                        # flags = keypoints[:,2] > 0.2  #detectron
-                        if sum(flags) == 0:
-                            continue
-                        bbox = keypoints[flags]
-                        bbox_max = bbox.max(0)
-                        bbox_min = bbox.min(0)
+            selected_data = data['people'][0]
+            height = 0
+            if len(data['people']) != 1:
+                for i in range(len(data['people'])):
+                    tmp = data['people'][i]
+                    keypoints = np.array(tmp['pose_keypoints_2d']).reshape(-1,3)
 
-                        if height < bbox_max[1] - bbox_min[1]:
-                            height = bbox_max[1] - bbox_min[1]
-                            selected_data = tmp
-            else:
-                pid = min(len(data['people'])-1, self.person_id)
-                selected_data = data['people'][pid]
+                    flags = keypoints[:,2] > 0.5 #openpose
+                    # flags = keypoints[:,2] > 0.2  #detectron
+                    if sum(flags) == 0:
+                        continue
+                    bbox = keypoints[flags]
+                    bbox_max = bbox.max(0)
+                    bbox_min = bbox.min(0)
 
+                    if height < bbox_max[1] - bbox_min[1]:
+                        height = bbox_max[1] - bbox_min[1]
+                        selected_data = tmp
             keypoints = np.array(selected_data['pose_keypoints_2d']).reshape(-1,3)
 
             flags = keypoints[:,2] > 0.5   #openpose
@@ -235,7 +231,7 @@ class EvalWPoseDataset(Dataset):
             im = im[:,:,3:] * im[:,:,:3] + 0.5 * (1.0 - im[:,:,3:])
             im = (255.0 * im).astype(np.uint8)
         h, w = im.shape[:2]
-        
+
         intrinsic = np.identity(4)
 
         trans_mat = np.identity(4)
@@ -249,14 +245,14 @@ class EvalWPoseDataset(Dataset):
         trans_mat[3,3] = 1.0
         trans_mat[0, 3] = -scale*(rect[0] + rect[2]//2 - w//2) * scale_im2ndc
         trans_mat[1, 3] = scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
-        
+
         intrinsic = np.matmul(trans_mat, intrinsic)
         im_512 = cv2.resize(im, (512, 512))
         im = cv2.resize(im, (self.load_size, self.load_size))
 
         image_512 = Image.fromarray(im_512[:,:,::-1]).convert('RGB')
         image = Image.fromarray(im[:,:,::-1]).convert('RGB')
-        
+
         B_MIN = np.array([-1, -1, -1])
         B_MAX = np.array([1, 1, 1])
         projection_matrix = np.identity(4)

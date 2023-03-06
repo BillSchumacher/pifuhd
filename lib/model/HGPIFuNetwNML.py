@@ -72,7 +72,7 @@ class HGPIFuNetwNML(BasePIFuNet):
 
     def loadFromHGHPIFu(self, net):
         hgnet = net.image_filter
-        pretrained_dict = hgnet.state_dict()            
+        pretrained_dict = hgnet.state_dict()
         model_dict = self.image_filter.state_dict()
 
         pretrained_dict = {k: v for k, v in hgnet.state_dict().items() if k in model_dict}                    
@@ -81,16 +81,15 @@ class HGPIFuNetwNML(BasePIFuNet):
             if v.size() == model_dict[k].size():
                 model_dict[k] = v
 
-        not_initialized = set()
-               
-        for k, v in model_dict.items():
-            if k not in pretrained_dict or v.size() != pretrained_dict[k].size():
-                not_initialized.add(k.split('.')[0])
-        
+        not_initialized = {
+            k.split('.')[0]
+            for k, v in model_dict.items()
+            if k not in pretrained_dict or v.size() != pretrained_dict[k].size()
+        }
         print('not initialized', sorted(not_initialized))
         self.image_filter.load_state_dict(model_dict) 
 
-        pretrained_dict = net.mlp.state_dict()            
+        pretrained_dict = net.mlp.state_dict()
         model_dict = self.mlp.state_dict()
 
         pretrained_dict = {k: v for k, v in net.mlp.state_dict().items() if k in model_dict}                    
@@ -99,12 +98,11 @@ class HGPIFuNetwNML(BasePIFuNet):
             if v.size() == model_dict[k].size():
                 model_dict[k] = v
 
-        not_initialized = set()
-               
-        for k, v in model_dict.items():
-            if k not in pretrained_dict or v.size() != pretrained_dict[k].size():
-                not_initialized.add(k.split('.')[0])
-        
+        not_initialized = {
+            k.split('.')[0]
+            for k, v in model_dict.items()
+            if k not in pretrained_dict or v.size() != pretrained_dict[k].size()
+        }
         print('not initialized', sorted(not_initialized))
         self.mlp.load_state_dict(model_dict) 
 
@@ -124,7 +122,7 @@ class HGPIFuNetwNML(BasePIFuNet):
             if self.netB is not None:
                 self.nmlB = self.netB.forward(images).detach()
                 nmls.append(self.nmlB)
-        if len(nmls) != 0:
+        if nmls:
             nmls = torch.cat(nmls,1)
             if images.size()[2:] != nmls.size()[2:]:
                 nmls = nn.Upsample(size=images.size()[2:], mode='bilinear', align_corners=True)(nmls)
@@ -165,14 +163,14 @@ class HGPIFuNetwNML(BasePIFuNet):
         intermediate_preds_list = []
 
         phi = None
-        for i, im_feat in enumerate(self.im_feat_list):
-            point_local_feat_list = [self.index(im_feat, xy), sp_feat]       
+        for im_feat in self.im_feat_list:
+            point_local_feat_list = [self.index(im_feat, xy), sp_feat]
             point_local_feat = torch.cat(point_local_feat_list, 1)
             pred, phi = self.mlp(point_local_feat)
             pred = in_bb * pred
 
             intermediate_preds_list.append(pred)
-        
+
         if update_phi:
             self.phi = phi
 
@@ -240,13 +238,12 @@ class HGPIFuNetwNML(BasePIFuNet):
         '''
         return the loss given the ground truth labels and prediction
         '''
-        error = {}
-        error['Err(occ)'] = 0
+        error = {'Err(occ)': 0}
         for preds in self.intermediate_preds_list:
             error['Err(occ)'] += self.criteria['occ'](preds, self.labels, gamma)
-        
+
         error['Err(occ)'] /= len(self.intermediate_preds_list)
-        
+
         if self.nmls is not None and self.labels_nml is not None:
             error['Err(nml)'] = self.criteria['nml'](self.nmls, self.labels_nml)
 

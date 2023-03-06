@@ -80,33 +80,45 @@ class HourGlass(nn.Module):
         self._generate_network(self.depth)
 
     def _generate_network(self, level):
-        self.add_module('b1_' + str(level), ConvBlock(self.features, self.features, norm=self.norm))
-        self.add_module('b2_' + str(level), ConvBlock(self.features, self.features, norm=self.norm))
+        self.add_module(
+            f'b1_{str(level)}',
+            ConvBlock(self.features, self.features, norm=self.norm),
+        )
+        self.add_module(
+            f'b2_{str(level)}',
+            ConvBlock(self.features, self.features, norm=self.norm),
+        )
 
         if level > 1:
             self._generate_network(level - 1)
         else:
-            self.add_module('b2_plus_' + str(level), ConvBlock(self.features, self.features, norm=self.norm))
+            self.add_module(
+                f'b2_plus_{str(level)}',
+                ConvBlock(self.features, self.features, norm=self.norm),
+            )
 
-        self.add_module('b3_' + str(level), ConvBlock(self.features, self.features, norm=self.norm))
+        self.add_module(
+            f'b3_{str(level)}',
+            ConvBlock(self.features, self.features, norm=self.norm),
+        )
 
     def _forward(self, level, inp):
         # upper branch
-        up1 = inp 
-        up1 = self._modules['b1_' + str(level)](up1)
+        up1 = inp
+        up1 = self._modules[f'b1_{str(level)}'](up1)
 
         # lower branch
         low1 = F.avg_pool2d(inp, 2, stride=2)
-        low1 = self._modules['b2_' + str(level)](low1)
+        low1 = self._modules[f'b2_{str(level)}'](low1)
 
         if level > 1:
             low2 = self._forward(level - 1, low1)
         else:
             low2 = low1
-            low2 = self._modules['b2_plus_' + str(level)](low2)
+            low2 = self._modules[f'b2_plus_{str(level)}'](low2)
 
         low3 = low2
-        low3 = self._modules['b3_' + str(level)](low3)
+        low3 = self._modules[f'b3_{str(level)}'](low3)
 
         up2 = F.interpolate(low3, scale_factor=2, mode='bicubic', align_corners=True)
         # up2 = F.interpolate(low3, scale_factor=2, mode='bilinear')
@@ -142,33 +154,40 @@ class HGFilter(nn.Module):
         elif self.down_type == 'conv128':
             self.conv2 = ConvBlock(128, 128, self.norm)
             self.down_conv2 = nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1)
-        elif self.down_type == 'ave_pool' or self.down_type == 'no_down':
+        elif self.down_type in ['ave_pool', 'no_down']:
             self.conv2 = ConvBlock(64, 128, self.norm)
-        
+
         self.conv3 = ConvBlock(128, 128, self.norm)
         self.conv4 = ConvBlock(128, 256, self.norm)
-        
+
         # start stacking
         for stack in range(self.n_stack):
-            self.add_module('m' + str(stack), HourGlass(self.depth, 256, self.norm))
+            self.add_module(f'm{str(stack)}', HourGlass(self.depth, 256, self.norm))
 
-            self.add_module('top_m_' + str(stack), ConvBlock(256, 256, self.norm))
-            self.add_module('conv_last' + str(stack),
-                            nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0))
+            self.add_module(f'top_m_{str(stack)}', ConvBlock(256, 256, self.norm))
+            self.add_module(
+                f'conv_last{str(stack)}',
+                nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+            )
             if self.norm == 'batch':
-                self.add_module('bn_end' + str(stack), nn.BatchNorm2d(256))
+                self.add_module(f'bn_end{str(stack)}', nn.BatchNorm2d(256))
             elif self.norm == 'group':
-                self.add_module('bn_end' + str(stack), nn.GroupNorm(32, 256))
-            
-            self.add_module('l' + str(stack),
-                            nn.Conv2d(256, last_ch, 
-                            kernel_size=1, stride=1, padding=0))
-            
+                self.add_module(f'bn_end{str(stack)}', nn.GroupNorm(32, 256))
+
+            self.add_module(
+                f'l{str(stack)}',
+                nn.Conv2d(256, last_ch, kernel_size=1, stride=1, padding=0),
+            )
+
             if stack < self.n_stack - 1:
                 self.add_module(
-                    'bl' + str(stack), nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0))
+                    f'bl{str(stack)}',
+                    nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0),
+                )
                 self.add_module(
-                    'al' + str(stack), nn.Conv2d(last_ch, 256, kernel_size=1, stride=1, padding=0))
+                    f'al{str(stack)}',
+                    nn.Conv2d(last_ch, 256, kernel_size=1, stride=1, padding=0),
+                )
 
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)), True)
@@ -182,7 +201,7 @@ class HGFilter(nn.Module):
             x = self.conv2(x)
         else:
             raise NameError('unknown downsampling type')
-    
+
         normx = x
 
         x = self.conv3(x)
@@ -192,25 +211,29 @@ class HGFilter(nn.Module):
 
         outputs = []
         for i in range(self.n_stack):
-            hg = self._modules['m' + str(i)](previous)
+            hg = self._modules[f'm{str(i)}'](previous)
 
             ll = hg
-            ll = self._modules['top_m_' + str(i)](ll)
+            ll = self._modules[f'top_m_{str(i)}'](ll)
 
-            ll = F.relu(self._modules['bn_end' + str(i)]
-                       (self._modules['conv_last' + str(i)](ll)), True)
+            ll = F.relu(
+                self._modules[f'bn_end{str(i)}'](
+                    self._modules[f'conv_last{str(i)}'](ll)
+                ),
+                True,
+            )
 
-            tmp_out = self._modules['l' + str(i)](ll)
+            tmp_out = self._modules[f'l{str(i)}'](ll)
 
             if self.use_sigmoid:
                 outputs.append(nn.Tanh()(tmp_out))
             else:
                 outputs.append(tmp_out)
-            
+
             if i < self.n_stack - 1:
-                ll = self._modules['bl' + str(i)](ll)
-                tmp_out_ = self._modules['al' + str(i)](tmp_out)
+                ll = self._modules[f'bl{str(i)}'](ll)
+                tmp_out_ = self._modules[f'al{str(i)}'](tmp_out)
                 previous = previous + ll + tmp_out_
-            
+
         return outputs, normx
     

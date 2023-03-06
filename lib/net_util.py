@@ -36,12 +36,11 @@ def load_state_dict(state_dict, net):
         if v.size() == model_dict[k].size():
             model_dict[k] = v
 
-    not_initialized = set()
-            
-    for k, v in model_dict.items():
-        if k not in pretrained_dict or v.size() != pretrained_dict[k].size():
-            not_initialized.add(k.split('.')[0])
-    
+    not_initialized = {
+        k.split('.')[0]
+        for k, v in model_dict.items()
+        if k not in pretrained_dict or v.size() != pretrained_dict[k].size()
+    }
     print('not initialized', sorted(not_initialized))
     net.load_state_dict(model_dict) 
 
@@ -64,7 +63,9 @@ def init_weights(net, init_type='normal', init_gain=0.02):
             elif init_type == 'orthogonal':
                 init.orthogonal_(m.weight.data, gain=init_gain)
             else:
-                raise NotImplementedError('initialization method [%s] is not implemented' % init_type)
+                raise NotImplementedError(
+                    f'initialization method [{init_type}] is not implemented'
+                )
             if hasattr(m, 'bias') and m.bias is not None:
                 init.constant_(m.bias.data, 0.0)
         elif classname.find(
@@ -72,7 +73,7 @@ def init_weights(net, init_type='normal', init_gain=0.02):
             init.normal_(m.weight.data, 1.0, init_gain)
             init.constant_(m.bias.data, 0.0)
 
-    print('initialize network with %s' % init_type)
+    print(f'initialize network with {init_type}')
     net.apply(init_func)
 
 def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
@@ -99,12 +100,11 @@ class CustomBCELoss(nn.Module):
         else:
             loss = -(gamma*gt*torch.log(x_hat) + (1.0-gamma)*(1.0-gt)*torch.log(1.0-x_hat))
 
-        if w is not None:
-            if len(w.size()) == 1:
-                w = w[:,None,None] 
-            return (loss * w).mean()
-        else:
+        if w is None:
             return loss.mean()
+        if len(w.size()) == 1:
+            w = w[:,None,None]
+        return (loss * w).mean()
 
 class CustomMSELoss(nn.Module):
     def __init__(self, gamma=None):
@@ -116,10 +116,7 @@ class CustomMSELoss(nn.Module):
         weight = gamma * gt + (1.0-gamma) * (1 - gt)
         loss = (weight * (pred - gt).pow(2)).mean()
 
-        if w is not None:
-            return (loss * w).mean()
-        else:
-            return loss.mean()
+        return (loss * w).mean() if w is not None else loss.mean()
 
 def createMLP(dims, norm='bn', activation='relu', last_op=nn.Tanh(), dropout=False):
     act = None

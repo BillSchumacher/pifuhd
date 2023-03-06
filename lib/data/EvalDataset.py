@@ -20,11 +20,8 @@ def crop_image(img, rect):
     top = abs(y) if y < 0 else 0
     right = abs(img.shape[1]-(x+w)) if x + w >= img.shape[1] else 0
     bottom = abs(img.shape[0]-(y+h)) if y + h >= img.shape[0] else 0
-    
-    if img.shape[2] == 4:
-        color = [0, 0, 0, 0]
-    else:
-        color = [0, 0, 0]
+
+    color = [0, 0, 0, 0] if img.shape[2] == 4 else [0, 0, 0]
     new_img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)
 
     x = x + left
@@ -42,7 +39,18 @@ class EvalDataset(Dataset):
         self.projection_mode = projection
 
         self.root = self.opt.dataroot
-        self.img_files = sorted([os.path.join(self.root,f) for f in os.listdir(self.root) if f.split('.')[-1] in ['png', 'jpeg', 'jpg', 'PNG', 'JPG', 'JPEG'] and os.path.exists(os.path.join(self.root,f.replace('.%s' % (f.split('.')[-1]), '_rect.txt')))])
+        self.img_files = sorted(
+            [
+                os.path.join(self.root, f)
+                for f in os.listdir(self.root)
+                if f.split('.')[-1] in ['png', 'jpeg', 'jpg', 'PNG', 'JPG', 'JPEG']
+                and os.path.exists(
+                    os.path.join(
+                        self.root, f.replace(f".{f.split('.')[-1]}", '_rect.txt')
+                    )
+                )
+            ]
+        )
         self.IMG = os.path.join(self.root)
 
         self.phase = 'val'
@@ -61,14 +69,18 @@ class EvalDataset(Dataset):
         return len(self.img_files)
 
     def get_n_person(self, index):
-        rect_path = self.img_files[index].replace('.%s' % (self.img_files[index].split('.')[-1]), '_rect.txt')
+        rect_path = self.img_files[index].replace(
+            f".{self.img_files[index].split('.')[-1]}", '_rect.txt'
+        )
         rects = np.loadtxt(rect_path, dtype=np.int32)
 
         return rects.shape[0] if len(rects.shape) == 2 else 1
 
     def get_item(self, index):
         img_path = self.img_files[index]
-        rect_path = self.img_files[index].replace('.%s' % (self.img_files[index].split('.')[-1]), '_rect.txt')
+        rect_path = self.img_files[index].replace(
+            f".{self.img_files[index].split('.')[-1]}", '_rect.txt'
+        )
         # Name
         img_name = os.path.splitext(os.path.basename(img_path))[0]
 
@@ -79,7 +91,7 @@ class EvalDataset(Dataset):
             im = im[:,:,3:] * im[:,:,:3] + 0.5 * (1.0 - im[:,:,3:])
             im = (255.0 * im).astype(np.uint8)
         h, w = im.shape[:2]
-        
+
         intrinsic = np.identity(4)
 
         trans_mat = np.identity(4)
@@ -98,14 +110,14 @@ class EvalDataset(Dataset):
         trans_mat[3,3] = 1.0
         trans_mat[0, 3] = -scale*(rect[0] + rect[2]//2 - w//2) * scale_im2ndc
         trans_mat[1, 3] = scale*(rect[1] + rect[3]//2 - h//2) * scale_im2ndc
-        
+
         intrinsic = np.matmul(trans_mat, intrinsic)
         im_512 = cv2.resize(im, (512, 512))
         im = cv2.resize(im, (self.load_size, self.load_size))
 
         image_512 = Image.fromarray(im_512[:,:,::-1]).convert('RGB')
         image = Image.fromarray(im[:,:,::-1]).convert('RGB')
-        
+
         B_MIN = np.array([-1, -1, -1])
         B_MAX = np.array([1, 1, 1])
         projection_matrix = np.identity(4)

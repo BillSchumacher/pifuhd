@@ -52,8 +52,7 @@ def make_rotate(rx, ry, rz):
     Rz[1, 1] = cosZ
     Rz[2, 2] = 1.0
 
-    R = np.matmul(np.matmul(Rz,Ry),Rx)
-    return R
+    return np.matmul(np.matmul(Rz,Ry),Rx)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-f', '--file_dir', type=str, required=True)
@@ -74,9 +73,7 @@ cam.far = 10
 
 obj_files = []
 for (root,dirs,files) in os.walk(args.file_dir, topdown=True): 
-    for file in files:
-        if '.obj' in file:
-            obj_files.append(os.path.join(root, file))
+    obj_files.extend(os.path.join(root, file) for file in files if '.obj' in file)
 print(obj_files)
 
 R = make_rotate(math.radians(180),0,0)
@@ -89,7 +86,7 @@ for i, obj_path in enumerate(obj_files):
     file_name = obj_file[:-4]
 
     if not os.path.exists(obj_path):
-        continue    
+        continue
     mesh = trimesh.load(obj_path)
     vertices = mesh.vertices
     faces = mesh.faces
@@ -103,27 +100,24 @@ for i, obj_path in enumerate(obj_files):
     vertices /= bbox_max[1] - bbox_min[1]
 
     normals = compute_normal(vertices, faces)
-    
+
     if args.geo_render:
         renderer.set_mesh(vertices, faces, normals, faces)
     else:
         renderer.set_mesh(vertices, faces, 0.5*normals+0.5, faces) 
-        
-    cnt = 0
-    for j in range(0, 361, 2):
+
+    for cnt, j in enumerate(range(0, 361, 2)):
         cam.center = np.array([0, 0, 0])
         cam.eye = np.array([2.0*math.sin(math.radians(j)), 0, 2.0*math.cos(math.radians(j))]) + cam.center
 
         renderer.set_camera(cam)
         renderer.display()
-        
+
         img = renderer.get_color(0)
         img = cv2.cvtColor(img, cv2.COLOR_RGBA2BGRA)
 
         cv2.imwrite(os.path.join(obj_root, 'rot_%04d.png' % cnt), 255*img)
-        cnt += 1
-
-    cmd = 'ffmpeg -framerate 30 -i ' + obj_root + '/rot_%04d.png -vcodec libx264 -y -pix_fmt yuv420p -refs 16 ' + os.path.join(obj_root, file_name + '.mp4')
+    cmd = f"ffmpeg -framerate 30 -i {obj_root}/rot_%04d.png -vcodec libx264 -y -pix_fmt yuv420p -refs 16 {os.path.join(obj_root, f'{file_name}.mp4')}"
     os.system(cmd)
-    cmd = 'rm %s/rot_*.png' % obj_root
+    cmd = f'rm {obj_root}/rot_*.png'
     os.system(cmd)

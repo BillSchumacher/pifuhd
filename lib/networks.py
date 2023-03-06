@@ -42,7 +42,7 @@ def get_norm_layer(norm_type='instance'):
     elif norm_type == 'instance':
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False)
     else:
-        raise NotImplementedError('normalization layer [%s] is not found' % norm_type)
+        raise NotImplementedError(f'normalization layer [{norm_type}] is not found')
     return norm_layer
 
 def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_global=9, n_local_enhancers=1, 
@@ -67,9 +67,7 @@ def define_G(input_nc, output_nc, ngf, netG, n_downsample_global=3, n_blocks_glo
 def print_network(net):
     if isinstance(net, list):
         net = net[0]
-    num_params = 0
-    for param in net.parameters():
-        num_params += param.numel()
+    num_params = sum(param.numel() for param in net.parameters())
     print(net)
     print('Total number of parameters: %d' % num_params)
 
@@ -81,10 +79,10 @@ class LocalEnhancer(nn.Module):
                  n_local_enhancers=1, n_blocks_local=3, norm_layer=nn.BatchNorm2d, padding_type='reflect'):        
         super(LocalEnhancer, self).__init__()
         self.n_local_enhancers = n_local_enhancers
-        
+
         ###### global generator model #####           
         ngf_global = ngf * (2**n_local_enhancers)
-        model_global = GlobalGenerator(input_nc, output_nc, ngf_global, n_downsample_global, n_blocks_global, norm_layer).model        
+        model_global = GlobalGenerator(input_nc, output_nc, ngf_global, n_downsample_global, n_blocks_global, norm_layer).model
         model_global = [model_global[i] for i in range(len(model_global)-3)] # get rid of final convolution layers        
         self.model = nn.Sequential(*model_global)                
 
@@ -96,11 +94,14 @@ class LocalEnhancer(nn.Module):
                                 norm_layer(ngf_global), nn.ReLU(True),
                                 nn.Conv2d(ngf_global, ngf_global * 2, kernel_size=3, stride=2, padding=1), 
                                 norm_layer(ngf_global * 2), nn.ReLU(True)]
-            ### residual blocks
-            model_upsample = []
-            for i in range(n_blocks_local):
-                model_upsample += [ResnetBlock(ngf_global * 2, padding_type=padding_type, norm_layer=norm_layer)]
-
+            model_upsample = [
+                ResnetBlock(
+                    ngf_global * 2,
+                    padding_type=padding_type,
+                    norm_layer=norm_layer,
+                )
+                for _ in range(n_blocks_local)
+            ]
             ### upsample
             model_upsample += [nn.ConvTranspose2d(ngf_global * 2, ngf_global, kernel_size=3, stride=2, padding=1, output_padding=1), 
                                norm_layer(ngf_global), nn.ReLU(True)]      
@@ -108,25 +109,26 @@ class LocalEnhancer(nn.Module):
             ### final convolution
             if n == n_local_enhancers:                
                 model_upsample += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0), nn.Tanh()]                       
-            
-            setattr(self, 'model'+str(n)+'_1', nn.Sequential(*model_downsample))
-            setattr(self, 'model'+str(n)+'_2', nn.Sequential(*model_upsample))                  
-        
+
+            setattr(self, f'model{str(n)}_1', nn.Sequential(*model_downsample))
+            setattr(self, f'model{str(n)}_2', nn.Sequential(*model_upsample))                  
+
         self.downsample = nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)
 
     def forward(self, input): 
         ### create input pyramid
         input_downsampled = [input]
-        for i in range(self.n_local_enhancers):
-            input_downsampled.append(self.downsample(input_downsampled[-1]))
-
+        input_downsampled.extend(
+            self.downsample(input_downsampled[-1])
+            for _ in range(self.n_local_enhancers)
+        )
         ### output at coarest level
-        output_prev = self.model(input_downsampled[-1])        
+        output_prev = self.model(input_downsampled[-1])
         ### build up one layer at a time
         for n_local_enhancers in range(1, self.n_local_enhancers+1):
-            model_downsample = getattr(self, 'model'+str(n_local_enhancers)+'_1')
-            model_upsample = getattr(self, 'model'+str(n_local_enhancers)+'_2')            
-            input_i = input_downsampled[self.n_local_enhancers-n_local_enhancers]            
+            model_downsample = getattr(self, f'model{str(n_local_enhancers)}_1')
+            model_upsample = getattr(self, f'model{str(n_local_enhancers)}_2')
+            input_i = input_downsampled[self.n_local_enhancers-n_local_enhancers]
             output_prev = model_upsample(model_downsample(input_i) + output_prev)
         return output_prev
 
@@ -178,7 +180,7 @@ class ResnetBlock(nn.Module):
         elif padding_type == 'zero':
             p = 1
         else:
-            raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+            raise NotImplementedError(f'padding [{padding_type}] is not implemented')
 
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p),
                        norm_layer(dim),
@@ -194,15 +196,14 @@ class ResnetBlock(nn.Module):
         elif padding_type == 'zero':
             p = 1
         else:
-            raise NotImplementedError('padding [%s] is not implemented' % padding_type)
+            raise NotImplementedError(f'padding [{padding_type}] is not implemented')
         conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p),
                        norm_layer(dim)]
 
         return nn.Sequential(*conv_block)
 
     def forward(self, x):
-        out = x + self.conv_block(x)
-        return out
+        return x + self.conv_block(x)
 
 class Encoder(nn.Module):
     def __init__(self, input_nc, output_nc, ngf=32, n_downsampling=4, norm_layer=nn.BatchNorm2d):

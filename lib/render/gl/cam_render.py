@@ -47,18 +47,12 @@ class CamRender(Render):
         # up
         eps = 1
         # print(key)
-        if key == b'w':
-            self.camera.center += eps * self.camera.direction
-        elif key == b's':
-            self.camera.center -= eps * self.camera.direction
-        if key == b'a':
+        if key == b' ':
+            self.camera.center += eps * self.camera.up
+        elif key == b'a':
             self.camera.center -= eps * self.camera.right
         elif key == b'd':
             self.camera.center += eps * self.camera.right
-        if key == b' ':
-            self.camera.center += eps * self.camera.up
-        elif key == b'x':
-            self.camera.center -= eps * self.camera.up
         elif key == b'i':
             self.camera.near += 0.1 * eps
             self.camera.far += 0.1 * eps
@@ -66,6 +60,12 @@ class CamRender(Render):
             self.camera.near -= 0.1 * eps
             self.camera.far -= 0.1 * eps
 
+        elif key == b's':
+            self.camera.center -= eps * self.camera.direction
+        elif key == b'w':
+            self.camera.center += eps * self.camera.direction
+        elif key == b'x':
+            self.camera.center -= eps * self.camera.up
         self.projection_matrix, self.model_view_matrix = self.camera.get_gl_matrix()
 
     def show(self):
